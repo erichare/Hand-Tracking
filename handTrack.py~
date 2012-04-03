@@ -49,7 +49,7 @@ if __name__ == "__main__":
         #cv2.waitKey()
         cv2.imshow('Hands', hands)
         #cv2.imwrite('out.jpg', hands)
-        cv2.waitKey()
+        #cv2.waitKey()
         if len(sys.argv) > 1:
             break
         else:
