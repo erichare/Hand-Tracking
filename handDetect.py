@@ -7,7 +7,7 @@ if __name__ == '__main__':
 
     args, img_args = getopt.getopt(sys.argv[1], '', ['cascade='])
     args = dict(args)
-    cascade_fn = args.get('--cascade', "haarcascade_hand.xml")
+    cascade_fn = args.get('--cascade', "hand.xml")
 
     cascade = cv2.CascadeClassifier(cascade_fn)
 
