@@ -52,7 +52,9 @@ class App(object):
             except: "Non-positive sizes"
             
             try: cv2.ellipse(vis, track_box, (0, 0, 255), 2)
-            except: print track_box
+            except: 
+                print track_box
+                self.tracking = False
                 
         cv2.imshow('camshift', vis)
 
@@ -85,16 +87,27 @@ if __name__ == "__main__":
         else:
             image = f
 
+        originalImage = image.copy()
+
         shp = (image.shape[0], image.shape[1])
+
+        red = np.zeros(shp, dtype='uint8')
+        green = np.zeros(shp, dtype='uint8')
+        blue = np.zeros(shp, dtype='uint8')
+
         hue = np.zeros(shp, dtype='uint8')
         sat = np.zeros(shp, dtype='uint8')
         val = np.zeros(shp, dtype='uint8')
+
         hands = np.zeros(shp, dtype='uint8')
+
+        cv2.split(image, (blue, green, red))
+        image[:,:,:][(red > 100) & (green < 100)] = 0   
 
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         cv2.split(hsv, (hue, sat, val))
 
-        #cv2.imshow('Live', image)
+        cv2.imshow('Live', image)
         #cv2.waitKey()
         #cv2.imshow('Hue', hue)
         #cv2.waitKey()
@@ -102,33 +115,45 @@ if __name__ == "__main__":
         #cv2.imshow('Value', val)
         #cv2.waitKey()
 
-        ret, hue = cv2.threshold(hue, 50, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
-        ret, hue = cv2.threshold(hue, 204, 255, cv2.THRESH_TOZERO_INV) #set to 0 if > 204, otherwise leave as is
+        ret, hue = cv2.threshold(hue, 20, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
+        ret, hue = cv2.threshold(hue, 234, 255, cv2.THRESH_TOZERO_INV) #set to 0 if > 204, otherwise leave as is
         ret, hue = cv2.threshold(hue, 0, 255, cv2.THRESH_BINARY_INV) #set to 255 if = 0, otherwise 0
 
         ret, sat = cv2.threshold(sat, 64, 255, cv2.THRESH_TOZERO) #set to 0 if <= 64, otherwise leave as is
         sat = cv2.equalizeHist(sat)
         ret, sat = cv2.threshold(sat, 64, 255, cv2.THRESH_BINARY) #set to 0 if <= 64, otherwise 255
 
+        ret, val = cv2.threshold(val, 20, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
+        val = cv2.equalizeHist(val)
+        ret, val = cv2.threshold(val, 20, 255, cv2.THRESH_BINARY) #set to 0 if > 204, otherwise leave as is
+
         #cv2.imshow('Saturation threshold', sat)
         #cv2.waitKey()
         #cv2.imshow('Hue threshold', hue)
         #cv2.waitKey()
+        #cv2.imshow('Val threshold', val)
+        #cv2.waitKey()
 
-        hands = cv2.multiply(hue, sat)
+        one = cv2.multiply(hue, sat)
+        hands = cv2.multiply(one, val)
 
         #smooth + threshold to filter noise
         hands = cv2.blur(hands, (10, 10))
         ret, hands = cv2.threshold(hands, 170, 255, cv2.THRESH_BINARY)
 
+        filteredImage = image.copy()
+        filteredImage[hands == 0] = 0
+
         #cv2.imshow('Original', image)
         #cv2.waitKey()
         cv2.imshow('Hands', hands)
-        cv2.waitKey()
+        #cv2.waitKey()
+        cv2.imshow('Filtered', filteredImage)
+        #cv2.waitKey()
         #cv2.imwrite('out.jpg', hands)
         #cv2.waitKey()
-        filteredImage = image.copy()
-        filteredImage[hands == 0] = 0
+
+        print filteredImage[1, 1]
 
         contours, hierarchy = cv2.findContours(hands, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         maxVal = [(0, 0), (0, 0)]
@@ -147,14 +172,14 @@ if __name__ == "__main__":
                 newRect = (rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3])
                 print newRect
                 rects.append(newRect)
-                cv2.rectangle(image, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 0, 0))
+                cv2.rectangle(originalImage, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 0, 0))
 
         #cv2.imshow('Original', image)
-        #cv2.waitKey()
+        cv2.waitKey()
 
         if len(rects) > 0 and (rects[0][2] - rects[0][0] > 40) and (rects[0][3] - rects[0][1] > 40):
             print "Running camshift"
-            camShifter.initialize(image, rects[0])
+            camShifter.initialize(originalImage, rects[0])
             camShifter.run()
 
         if len(sys.argv) == 1:
