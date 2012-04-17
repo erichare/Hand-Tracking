@@ -5,7 +5,11 @@ import os
 import string
 import util
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+import heapq
+import random
+import mpl_toolkits.mplot3d.axes3d as p3
+
+NUM_HANDS = 2
 
 f = open('Tcw.txt', 'r')
 aa = f.readlines();
@@ -17,6 +21,9 @@ camAlpha = util.camAlpha
 camCenter = util.camCenter
 px = camCenter[0][0]
 py = camCenter[1][0]
+
+def area(rect):
+    return (rect[2] - rect[0]) * (rect[3] - rect[1])
 
 def worldPoint(j, i, d):
     px = camCenter[0][0]
@@ -30,6 +37,15 @@ def worldPoint(j, i, d):
 		
     return (X_[0], X_[1], X[2])
 
+def findHands(hands, num = NUM_HANDS):
+    contours, hierarchy = cv2.findContours(hands, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    return heapq.nlargest(num, contours, key = len)
+
+def drawCircles(image, circles, color = (0, 255, 0)):
+    for circ in circles:
+        cv2.circle(image, circ, 2, color, -1)
+    
+
 class App(object):
     def __init__(self):
         cv2.namedWindow('camshift')
@@ -37,9 +53,10 @@ class App(object):
         self.selection = None
         self.track_box = None
 
-    def initialize(self, original, image, selection):
+    def initialize(self, image, original, selection, color):
         self.image = image.copy()
         self.original = original.copy()
+        self.color = color
         if not self.tracking:
             self.selection = selection
 
@@ -55,7 +72,7 @@ class App(object):
     
     def run(self):
         if self.selection:
-            vis = self.original.copy()
+            vis = self.image.copy()
             hsv = cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
             mask = cv2.inRange(hsv, np.array((0, 60, 32), dtype="uint8"), np.array((180, 255, 255), dtype="uint8"))
 
@@ -96,14 +113,15 @@ if __name__ == "__main__":
     fnames = [f for f in fnames if f.find('image_') >= 0]
     n = len(fnames)/2
 
-    camShifter1 = App()
-    camShifter2 = App()
-
-    circles = []
+    camShifter = []
     plotPoints = []
-    plotX = []
-    plotY = []
-    plotZ = []
+    colors = []
+    circles = []
+    for i in range(NUM_HANDS):
+        camShifter.append(App())
+        plotPoints.append([[], [], []])
+        colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+        circles.append([])
 
     image = None
 
@@ -115,6 +133,7 @@ if __name__ == "__main__":
         depth = cv2.imread(depPath, -1)
 
         originalImage = image.copy()
+        original = image.copy()
 
         shp = (image.shape[0], image.shape[1])
 
@@ -180,123 +199,83 @@ if __name__ == "__main__":
         #cv2.imwrite('out.jpg', hands)
         #cv2.waitKey()
 
-        contours, hierarchy = cv2.findContours(hands, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        maxVal = [(0, 0), (0, 0)]
-        #maxVal = [(0, 0)]
-        for i in range(len(contours)):
-            cnt = contours[i]
-            if (maxVal[0][0] < len(cnt) or maxVal[1][0] < len(cnt)):
-                maxVal = sorted(maxVal)
-                maxVal.reverse()
-                maxVal.pop()
-                maxVal.append((len(cnt), i))
-            #if (maxVal[0][0] < len(cnt)):
-            #    maxVal = [(len(cnt), i)]
-
-        print "#### MaxVal ####"
-        print maxVal
-        print "#### ####"
+        handContours = findHands(hands)
 
         rects = []
-        for (val, idx) in maxVal:
-            if (val != 0):
-                rect = cv2.boundingRect(contours[idx])
-                newRect = (rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3])
+        for i in range(len(handContours)):
+            handCnt = handContours[i]
+            rect = cv2.boundingRect(handCnt)
+            newRect = (rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3])
+            if (area(newRect) > 100):
                 rects.append(newRect)
                 cv2.rectangle(originalImage, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 255, 0))
+                filteredImage = filteredImage.copy()
+                ogfilteredImage = filteredImage.copy()
+                filteredImage[rects[i][1] : rects[i][3], rects[i][0] : rects[i][2], :] = 256
+                ogfilteredImage[filteredImage != 256] = 0
+                camShifter[i].initialize(ogfilteredImage, original, rects[i], colors[i])
  
         print "#### Rects ####"
         print rects
         print "#### ####"
-        #cv2.imshow('Original', image)
-        #cv2.waitKey()
 
-        if len(rects) > 0:
-            filteredImage1 = filteredImage.copy()
-            ogfilteredImage1 = filteredImage.copy()
-            filteredImage1[rects[0][1] : rects[0][3], rects[0][0] : rects[0][2], :] = 256
-            ogfilteredImage1[filteredImage1 != 256] = 0
+        for i in range(len(camShifter)):
+            camShift = camShifter[i]
+            camShift.run()
+            try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
+            except: print "Could not draw ellipse"
 
-        if len(rects) > 1:
-            filteredImage2 = filteredImage.copy()
-            ogfilteredImage2 = filteredImage.copy()
-            filteredImage2[rects[1][1] : rects[1][3], rects[1][0] : rects[1][2], :] = 256
-            ogfilteredImage2[filteredImage2 != 256] = 0
+            print "#### RotatedRect TrackBox 1 ####"
+            try: print camShifter1.track_box
+            except: print ""
+            print "#### ####"
 
-        if len(rects) > 0 and rects[0][2] - rects[0][0] > 20 and rects[0][3] - rects[0][1] > 20:
-            print "Running camshift1"
-            camShifter1.initialize(originalImage, ogfilteredImage1, rects[0])
+            try: circles[i].append((int(camShift.track_box[0][0]), int(camShift.track_box[0][1])))
+            except: print ""
+            drawCircles(image, circles[i], color = colors[i])
 
-        if len(rects) > 1 and rects[1][2] - rects[1][0] > 20 and rects[1][3] - rects[1][1] > 20:
-            print "Running camshift2"
-            camShifter2.initialize(originalImage, ogfilteredImage2, rects[1])
+            print "#### PLOT ####"
+            try: 
+                point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
+                print point
 
-        camShifter1.run()
-        camShifter2.run()
+                for j in range(3):
+                    plotPoints[i][j].append(point[j])
+            except: print ""
+            print "#### ####"
 
-        try: cv2.ellipse(originalImage, camShifter1.track_box, (255, 0, 0), 2)
-        except: print "Could not draw ellipse"
-
-        print "#### RotatedRect TrackBox 1 ####"
-        try: print camShifter1.track_box
-        except: print ""
-        print "#### ####"
-
-        try: cv2.ellipse(originalImage, camShifter2.track_box, (0, 0, 255), 2)
-        except: print "Could not draw ellipse"
-
-        print "#### RotatedRect TrackBox 2 ####"
-        try: print camShifter2.track_box
-        except: print ""
-        print "#### ####"
-
-        try: circles.append((int(camShifter1.track_box[0][0]), int(camShifter1.track_box[0][1])))
-        except: print ""
-        if len(circles) > 10000:
-            circles.pop(0)
-        for circ in circles:
-            cv2.circle(image, circ, 3, (0, 255, 0), -1)
-
-        try: circles.append((int(camShifter2.track_box[0][0]), int(camShifter2.track_box[0][1])))
-        except: print ""
-        if len(circles) > 10000:
-            circles.pop(0)
-        for circ in circles:
-            cv2.circle(image, circ, 3, (255, 0, 255), -1)
-
-        print "#### TEST ####"
-        try: 
-            point = worldPoint(camShifter2.track_box[0][0], camShifter2.track_box[0][1], depth[camShifter2.track_box[0][0], camShifter2.track_box[0][1]])
-        except: print ""
-        try: print point
-        except: print ""
-        try: plotPoints.append(point)
-        except: print ""
-        try: plotX.append(point[0])
-        except: print ""
-        try: plotY.append(point[1])
-        except: print ""
-        try: plotZ.append(point[2])
-        except: print ""
-        print "#### ####"
-                    
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        cv2.waitKey()
+        cv2.waitKey(10)
 
-        if len(sys.argv) == 1:
-            lst.append(vc.read()[1])
+    for i in range(len(camShifter)):
+        miniX = plotPoints[i][0].pop(plotPoints[i][0].index(min(plotPoints[i][0])))
+        miniY = plotPoints[i][1].pop(plotPoints[i][1].index(max(plotPoints[i][1])))
+        miniZ = plotPoints[i][2].pop(plotPoints[i][2].index(min(plotPoints[i][2])))
 
-    for i in range(4):
-        plotX.remove(min(plotX))
-        plotY.remove(max(plotY))
-        plotZ.remove(min(plotZ))
+        while (miniX > plotPoints[i][0][plotPoints[i][0].index(min(plotPoints[i][0]))] - 1):
+            miniX = plotPoints[i][0].pop(plotPoints[i][0].index(min(plotPoints[i][0])))
+            miniY = plotPoints[i][1].pop(plotPoints[i][1].index(max(plotPoints[i][1])))
+            miniZ = plotPoints[i][2].pop(plotPoints[i][2].index(min(plotPoints[i][2])))
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(plotX, plotY, plotZ)
 
-    plt.show()
-    
-    
+        #fig = plt.figure()
+
+        # this connects each of the points with lines
+        #ax = p3.Axes3D(fig)
+        # plot3D requires a 1D array for x, y, and z
+        # ravel() converts the 100x100 array into a 1x10000 array
+        #ax.scatter3D(plotX[i], plotY[i], plotZ[i], color = mplColor)
+        #ax.set_xlabel('X')
+        #ax.set_ylabel('Y')
+        #ax.set_zlabel('Z')
+        #fig.add_axes(ax)
+
+    for j in range(3):
+        for i in range(len(camShifter)):
+            mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
+            time = range(len(plotPoints[i][j]))
+            plt.plot(time, plotPoints[i][j], color = mplColor)
+
+        plt.show()
 
