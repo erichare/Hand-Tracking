@@ -3,6 +3,32 @@ import numpy as np
 import sys
 import os
 import string
+import util
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+
+f = open('Tcw.txt', 'r')
+aa = f.readlines();
+bb = [a.strip().split() for a in aa]
+arr = [ [float (b1) for b1 in b] for b in bb]
+Tcw = np.array(arr)
+Twc = util.invertTransform(Tcw)
+camAlpha = util.camAlpha
+camCenter = util.camCenter
+px = camCenter[0][0]
+py = camCenter[1][0]
+
+def worldPoint(j, i, d):
+    px = camCenter[0][0]
+    py = camCenter[1][0]
+    x = (j - px)/camAlpha
+    y = (i - py)/camAlpha
+    z = d
+	
+    X = np.array([x, y, d, 1])
+    X_ = np.dot(Tcw, X.transpose())
+		
+    return (X_[0], X_[1], X[2])
 
 class App(object):
     def __init__(self):
@@ -61,37 +87,32 @@ class App(object):
                 if (self.track_box[0][1] == 0.0):
                     self.selection = False; self.tracking = False
 
+
 if __name__ == "__main__":
+
+    folder = sys.argv[1]
+    fnames = os.listdir(folder)
+    fnames.sort()
+    fnames = [f for f in fnames if f.find('image_') >= 0]
+    n = len(fnames)/2
+
     camShifter1 = App()
     camShifter2 = App()
 
     circles = []
+    plotPoints = []
+    plotX = []
+    plotY = []
+    plotZ = []
 
     image = None
-    vc = None
-    lst = []
-    if len(sys.argv) > 1:
-        try:
-            lst = os.listdir(sys.argv[1])
-            lst.sort()
-        except:
-            lst.append(' ')
-    else:
-        vc = cv2.VideoCapture(0)
-        vc.open(0)
-        vc.open(0)
-        lst.append(vc.read()[1])
 
-    for f in lst:
-        image = None
-        if len(sys.argv) > 1:
-            path = sys.argv[1] + '/' + f
-            if (f == ' '):
-                path = path.rpartition('/')[0]
+    for i in range(n):
+        depPath = os.path.join(folder, 'image_'+str(i)+'_dep.png')
+        imgPath = os.path.join(folder, 'image_'+str(i)+'_rgb.png')
 
-            image = cv2.imread(path)
-        else:
-            image = f
+        image = cv2.imread(imgPath)
+        depth = cv2.imread(depPath, -1)
 
         originalImage = image.copy()
 
@@ -242,13 +263,40 @@ if __name__ == "__main__":
             circles.pop(0)
         for circ in circles:
             cv2.circle(image, circ, 3, (255, 0, 255), -1)
+
+        print "#### TEST ####"
+        try: 
+            point = worldPoint(camShifter2.track_box[0][0], camShifter2.track_box[0][1], depth[camShifter2.track_box[0][0], camShifter2.track_box[0][1]])
+        except: print ""
+        try: print point
+        except: print ""
+        try: plotPoints.append(point)
+        except: print ""
+        try: plotX.append(point[0])
+        except: print ""
+        try: plotY.append(point[1])
+        except: print ""
+        try: plotZ.append(point[2])
+        except: print ""
+        print "#### ####"
                     
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        cv2.waitKey(5)
+        cv2.waitKey()
 
         if len(sys.argv) == 1:
             lst.append(vc.read()[1])
+
+    for i in range(4):
+        plotX.remove(min(plotX))
+        plotY.remove(max(plotY))
+        plotZ.remove(min(plotZ))
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot(plotX, plotY, plotZ)
+
+    plt.show()
     
     
 
