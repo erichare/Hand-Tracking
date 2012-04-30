@@ -53,9 +53,8 @@ class App(object):
         self.selection = None
         self.track_box = None
 
-    def initialize(self, image, original, selection, color):
+    def initialize(self, original, image, selection, color):
         self.image = image.copy()
-        self.original = original.copy()
         self.color = color
         if not self.tracking:
             self.selection = selection
@@ -101,8 +100,6 @@ class App(object):
 
                 try: self.track_box, self.selection = cv2.CamShift(prob, self.selection, term_crit)
                 except: print "FAILED: Non-positive sizes"; self.selection = False; self.tracking = False
-                if (self.track_box[0][1] == 0.0):
-                    self.selection = False; self.tracking = False
 
 
 if __name__ == "__main__":
@@ -192,9 +189,9 @@ if __name__ == "__main__":
 
         #cv2.imshow('Original', image)
         #cv2.waitKey()
-        cv2.imshow('Hands', hands)
+        #cv2.imshow('Hands', hands)
         #cv2.waitKey()
-        cv2.imshow('Filtered', filteredImage)
+        #cv2.imshow('Filtered', filteredImage)
         #cv2.waitKey()
         #cv2.imwrite('out.jpg', hands)
         #cv2.waitKey()
@@ -209,11 +206,7 @@ if __name__ == "__main__":
             if (area(newRect) > 100):
                 rects.append(newRect)
                 cv2.rectangle(originalImage, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 255, 0))
-                filteredImage = filteredImage.copy()
-                ogfilteredImage = filteredImage.copy()
-                filteredImage[rects[i][1] : rects[i][3], rects[i][0] : rects[i][2], :] = 256
-                ogfilteredImage[filteredImage != 256] = 0
-                camShifter[i].initialize(ogfilteredImage, original, rects[i], colors[i])
+                camShifter[i].initialize(original, filteredImage, rects[i], colors[i])
  
         print "#### Rects ####"
         print rects
@@ -226,8 +219,8 @@ if __name__ == "__main__":
             except: print "Could not draw ellipse"
 
             print "#### RotatedRect TrackBox 1 ####"
-            try: print camShifter1.track_box
-            except: print ""
+            try: print camShifter[i].track_box
+            except: print "Could not print trackbox"
             print "#### ####"
 
             try: circles[i].append((int(camShift.track_box[0][0]), int(camShift.track_box[0][1])))
