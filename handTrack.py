@@ -25,6 +25,9 @@ py = camCenter[1][0]
 def area(rect):
     return (rect[2] - rect[0]) * (rect[3] - rect[1])
 
+def sameRect(rect1, rect2):
+    return ((abs(rect1[0] - rect2[0]) < 15) and (abs(rect1[1] - rect2[1]) < 15))
+
 def worldPoint(j, i, d):
     px = camCenter[0][0]
     py = camCenter[1][0]
@@ -99,7 +102,9 @@ class App(object):
                 print "#### ####"
 
                 try: self.track_box, self.selection = cv2.CamShift(prob, self.selection, term_crit)
-                except: print "FAILED: Non-positive sizes"; self.selection = False; self.tracking = False
+                except: print "FAILED: Non-positive sizes"; self.selection = None; self.tracking = False
+                if self.selection[0] >= 640 or self.selection[0] <= 0 or self.selection[1] >= 480 or self.selection[1] <= 0:
+                    self.selection = None; self.tracking = False
 
 
 if __name__ == "__main__":
@@ -184,8 +189,8 @@ if __name__ == "__main__":
         hands = cv2.blur(hands, (10, 10))
         ret, hands = cv2.threshold(hands, 170, 255, cv2.THRESH_BINARY)
 
-        filteredImage = image.copy()
-        filteredImage[hands == 0] = 0
+        filteredImages = [image.copy(), image.copy()]
+        oneHandImages = [image.copy(), image.copy()]
 
         #cv2.imshow('Original', image)
         #cv2.waitKey()
@@ -197,7 +202,6 @@ if __name__ == "__main__":
         #cv2.waitKey()
 
         handContours = findHands(hands)
-
         rects = []
         for i in range(len(handContours)):
             handCnt = handContours[i]
@@ -206,7 +210,14 @@ if __name__ == "__main__":
             if (area(newRect) > 100):
                 rects.append(newRect)
                 cv2.rectangle(originalImage, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 255, 0))
-                camShifter[i].initialize(original, filteredImage, rects[i], colors[i])
+        rects.sort()
+        rects.reverse()
+
+        for i in range(len(rects)):
+            filteredImages[i][rects[i][1] : rects[i][3], rects[i][0]: rects[i][2], :] = 1
+
+            oneHandImages[i][filteredImages[i] != 1] = 0
+            camShifter[i].initialize(original, oneHandImages[i], rects[i], colors[i])
  
         print "#### Rects ####"
         print rects
@@ -216,13 +227,16 @@ if __name__ == "__main__":
             camShift = camShifter[i]
             camShift.run()
             try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
-            except: print "Could not draw ellipse"
+            except: 
+                print "Could not draw ellipse"
+                camShift.selection = None; camShift.tracking = False
+                continue
 
             print "#### RotatedRect TrackBox 1 ####"
             try: print camShifter[i].track_box
             except: print "Could not print trackbox"
             print "#### ####"
-
+            
             try: circles[i].append((int(camShift.track_box[0][0]), int(camShift.track_box[0][1])))
             except: print ""
             drawCircles(image, circles[i], color = colors[i])
@@ -231,9 +245,10 @@ if __name__ == "__main__":
             try: 
                 point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
                 print point
-
-                for j in range(3):
-                    plotPoints[i][j].append(point[j])
+                
+                if (point[0] > 0.5):
+                    for j in range(3):
+                        plotPoints[i][j].append(point[j])
             except: print ""
             print "#### ####"
 
@@ -241,34 +256,22 @@ if __name__ == "__main__":
         cv2.imshow('camshift', originalImage)
         cv2.waitKey(10)
 
+    fig = plt.figure()
+
+    # this connects each of the points with lines
+    ax = p3.Axes3D(fig)
+    # plot3D requires a 1D array for x, y, and z
+    # ravel() converts the 100x100 array into a 1x10000 array
     for i in range(len(camShifter)):
-        miniX = plotPoints[i][0].pop(plotPoints[i][0].index(min(plotPoints[i][0])))
-        miniY = plotPoints[i][1].pop(plotPoints[i][1].index(max(plotPoints[i][1])))
-        miniZ = plotPoints[i][2].pop(plotPoints[i][2].index(min(plotPoints[i][2])))
+        mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
+        ax.scatter3D(plotPoints[i][0], plotPoints[i][1], plotPoints[i][2], color = mplColor)
+    plt.show()
 
-        while (miniX > plotPoints[i][0][plotPoints[i][0].index(min(plotPoints[i][0]))] - 1):
-            miniX = plotPoints[i][0].pop(plotPoints[i][0].index(min(plotPoints[i][0])))
-            miniY = plotPoints[i][1].pop(plotPoints[i][1].index(max(plotPoints[i][1])))
-            miniZ = plotPoints[i][2].pop(plotPoints[i][2].index(min(plotPoints[i][2])))
+    #for j in range(3):
+    #    for i in range(len(camShifter)):
+    #        mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
+    #        time = range(len(plotPoints[i][j]))
+    #        plt.plot(time, plotPoints[i][j], color = mplColor)
 
-
-        #fig = plt.figure()
-
-        # this connects each of the points with lines
-        #ax = p3.Axes3D(fig)
-        # plot3D requires a 1D array for x, y, and z
-        # ravel() converts the 100x100 array into a 1x10000 array
-        #ax.scatter3D(plotX[i], plotY[i], plotZ[i], color = mplColor)
-        #ax.set_xlabel('X')
-        #ax.set_ylabel('Y')
-        #ax.set_zlabel('Z')
-        #fig.add_axes(ax)
-
-    for j in range(3):
-        for i in range(len(camShifter)):
-            mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
-            time = range(len(plotPoints[i][j]))
-            plt.plot(time, plotPoints[i][j], color = mplColor)
-
-        plt.show()
+    #    plt.show()
 
