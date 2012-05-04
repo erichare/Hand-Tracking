@@ -57,7 +57,7 @@ class App(object):
         self.track_box = None
 
     def initialize(self, original, image, selection, color):
-        self.image = image.copy()
+        self.image = image
         self.color = color
         if not self.tracking:
             self.selection = selection
@@ -163,8 +163,8 @@ if __name__ == "__main__":
         #cv2.imshow('Value', val)
         #cv2.waitKey()
 
-        ret, hue = cv2.threshold(hue, 50, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
-        ret, hue = cv2.threshold(hue, 204, 255, cv2.THRESH_TOZERO_INV) #set to 0 if > 204, otherwise leave as is
+        ret, hue = cv2.threshold(hue, 20, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
+        ret, hue = cv2.threshold(hue, 234, 255, cv2.THRESH_TOZERO_INV) #set to 0 if > 204, otherwise leave as is
         ret, hue = cv2.threshold(hue, 0, 255, cv2.THRESH_BINARY_INV) #set to 255 if = 0, otherwise 0
 
         ret, sat = cv2.threshold(sat, 64, 255, cv2.THRESH_TOZERO) #set to 0 if <= 64, otherwise leave as is
@@ -175,6 +175,10 @@ if __name__ == "__main__":
         val = cv2.equalizeHist(val)
         ret, val = cv2.threshold(val, 40, 255, cv2.THRESH_BINARY) #set to 0 if > 204, otherwise leave as is
 
+        ret, col = cv2.threshold(red, 175, 255, cv2.THRESH_BINARY)
+        #ret, col2 = cv2.threshold(green, 140, 255, cv2.THRESH_BINARY_INV)
+        ret, col3 = cv2.threshold(blue, 80, 255, cv2.THRESH_BINARY)
+
         #cv2.imshow('Saturation threshold', sat)
         #cv2.waitKey()
         #cv2.imshow('Hue threshold', hue)
@@ -183,19 +187,21 @@ if __name__ == "__main__":
         #cv2.waitKey()
 
         one = cv2.multiply(hue, sat)
-        hands = cv2.multiply(one, val)
+        two = cv2.multiply(one, col)
+        #three = cv2.multiply(two, col2)
+        four = cv2.multiply(two, col3)
+        hands = cv2.multiply(four, val)
 
         #smooth + threshold to filter noise
-        hands = cv2.blur(hands, (10, 10))
-        ret, hands = cv2.threshold(hands, 170, 255, cv2.THRESH_BINARY)
+        hands = cv2.blur(hands, (13, 13))
+        ret, hands = cv2.threshold(hands, 200, 255, cv2.THRESH_BINARY)
 
-        filteredImages = [image.copy(), image.copy()]
-        oneHandImages = [image.copy(), image.copy()]
+        #filteredImages[0][hands == 0] = 0
 
         #cv2.imshow('Original', image)
         #cv2.waitKey()
-        #cv2.imshow('Hands', hands)
-        #cv2.waitKey()
+        cv2.imshow('Hands', hands)
+        cv2.waitKey()
         #cv2.imshow('Filtered', filteredImage)
         #cv2.waitKey()
         #cv2.imwrite('out.jpg', hands)
@@ -206,18 +212,20 @@ if __name__ == "__main__":
         for i in range(len(handContours)):
             handCnt = handContours[i]
             rect = cv2.boundingRect(handCnt)
-            newRect = (rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3])
-            if (area(newRect) > 100):
+            newRect = (max(rect[0] - 20, 0), max(rect[1] - 20, 0), min(rect[0] + rect[2] + 20, shp[1]), min(rect[1] + rect[3] + 20, shp[0]))
+            if (area(newRect) > 2300):
                 rects.append(newRect)
-                cv2.rectangle(originalImage, (rect[0], rect[1]), (rect[0] + rect[2], rect[1] + rect[3]), (255, 255, 0))
+                cv2.rectangle(originalImage, (max(rect[0] - 20, 0), max(rect[1] - 20, 0)), (min(rect[0] + rect[2] + 20, shp[1]), min(rect[1] + rect[3] + 20, shp[0])), (255, 255, 0))
         rects.sort()
         rects.reverse()
-
+            
         for i in range(len(rects)):
-            filteredImages[i][rects[i][1] : rects[i][3], rects[i][0]: rects[i][2], :] = 1
-
-            oneHandImages[i][filteredImages[i] != 1] = 0
-            camShifter[i].initialize(original, oneHandImages[i], rects[i], colors[i])
+            im = np.zeros(shp + (3,), dtype = "uint8")
+            im[rects[i][1] : rects[i][3], rects[i][0] : rects[i][2], :] = 1
+            out = cv2.multiply(image, im)
+            #cv2.imshow('two', out)
+            #cv2.waitKey()
+            camShifter[i].initialize(original, out, rects[i], colors[i])
  
         print "#### Rects ####"
         print rects
@@ -256,22 +264,22 @@ if __name__ == "__main__":
         cv2.imshow('camshift', originalImage)
         cv2.waitKey(10)
 
-    fig = plt.figure()
+    #fig = plt.figure()
 
     # this connects each of the points with lines
-    ax = p3.Axes3D(fig)
+    #ax = p3.Axes3D(fig)
     # plot3D requires a 1D array for x, y, and z
     # ravel() converts the 100x100 array into a 1x10000 array
-    for i in range(len(camShifter)):
-        mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
-        ax.scatter3D(plotPoints[i][0], plotPoints[i][1], plotPoints[i][2], color = mplColor)
-    plt.show()
+    #for i in range(len(camShifter)):
+    #    mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
+    #    ax.scatter3D(plotPoints[i][0], plotPoints[i][1], plotPoints[i][2], color = mplColor)
+    #plt.show()
 
-    #for j in range(3):
-    #    for i in range(len(camShifter)):
-    #        mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
-    #        time = range(len(plotPoints[i][j]))
-    #        plt.plot(time, plotPoints[i][j], color = mplColor)
+    for j in range(3):
+        for i in range(len(camShifter)):
+            mplColor = (float(camShifter[i].color[2]) / 255, float(camShifter[i].color[1]) / 255, float(camShifter[i].color[0]) / 255)
+            time = range(len(plotPoints[i][j]))
+            plt.plot(time, plotPoints[i][j], color = mplColor)
 
-    #    plt.show()
+        plt.show()
 
