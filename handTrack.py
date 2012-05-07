@@ -148,8 +148,11 @@ if __name__ == "__main__":
     startTime = time()
     FPS = 0
     lastI = 0
-    valCal = 40
-    hueCal = 50
+    valCal = 74
+    hueCal = 30
+    satCal = 64
+    if (folder == "chop1"):
+        valCal = valCal - 40
     for i in range(n):
         #if (time() - startTime > 1):
         #    FPS = i - lastI
@@ -196,9 +199,9 @@ if __name__ == "__main__":
         ret, hue = cv2.threshold(hue, 255 - hueCal, 255, cv2.THRESH_TOZERO_INV)
         ret, hue = cv2.threshold(hue, 0, 255, cv2.THRESH_BINARY_INV)
 
-        ret, sat = cv2.threshold(sat, 64, 255, cv2.THRESH_TOZERO) #set to 0 if <= 64, otherwise leave as is
+        ret, sat = cv2.threshold(sat, satCal, 255, cv2.THRESH_TOZERO) #set to 0 if <= 64, otherwise leave as is
         sat = cv2.equalizeHist(sat)
-        ret, sat = cv2.threshold(sat, 64, 255, cv2.THRESH_BINARY) #set to 0 if <= 64, otherwise 255
+        ret, sat = cv2.threshold(sat, satCal, 255, cv2.THRESH_BINARY) #set to 0 if <= 64, otherwise 255
 
         ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
         val = cv2.equalizeHist(val)
@@ -265,10 +268,6 @@ if __name__ == "__main__":
                 print "OOOOPS. Same one!"
                 sameCounts[j] = 0
             elif (camShift.tracking):
-                if (valCal < 70 and (len(circles[j]) % 20 == 19)):
-                    valCal = valCal + 5
-                if (hueCal > 30 and (len(circles[j]) % 20 == 19)):
-                    hueCal = hueCal - 5
                 try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
                 except: 
                     print "Could not draw ellipse"
@@ -292,10 +291,6 @@ if __name__ == "__main__":
             try: circles[j].append((int(camShift.track_box[0][0]), int(camShift.track_box[0][1])))
             except: print ""
             drawCircles(image, circles[j], color = colors[j])
-
-            print "VALCAL IS", valCal
-            print "HUECAL IS", hueCal
-            print "I is", len(circles[j])
 
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
