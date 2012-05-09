@@ -27,7 +27,7 @@ def area(rect):
     return (rect[2] - rect[0]) * (rect[3] - rect[1])
 
 def sameRect(rect1, rect2):
-    test1 = (((abs(rect1[0] - rect2[0]) < 25) and (abs(rect1[1] - rect2[1]) < 25)))
+    test1 = (((abs(rect1[0] - rect2[0]) < 35) and (abs(rect1[1] - rect2[1]) < 35)))
     test2 = ((rect1[0] > rect2[0]) and (rect1[2] < rect2[2]) and (rect1[1] > rect2[1]) and (rect1[3] < rect2[3]))
     test3 = ((rect1[0] < rect2[0]) and (rect1[2] > rect2[2]) and (rect1[1] < rect2[1]) and (rect1[3] > rect2[3]))
     return (test1 or test2 or test3)
@@ -59,6 +59,7 @@ class App(object):
         self.tracking = False
         self.selection = None
         self.prevSelection = None
+        self.reDraw = False
         self.track_box = None
 
     def initialize(self, original, image, selection, color):
@@ -118,6 +119,7 @@ class App(object):
                         self.track_box = track_box
                     else:
                         self.selection = None; self.tracking = False
+                        self.reDraw = True
                         print "OOOPS. too far apart"
 
                 except: print "FAILED: Non-positive sizes"; self.selection = None; self.tracking = False
@@ -148,11 +150,11 @@ if __name__ == "__main__":
     startTime = time()
     FPS = 0
     lastI = 0
-    valCal = 74
+    valCal = 72
     hueCal = 30
-    satCal = 64
-    if (folder == "chop1"):
-        valCal = valCal - 40
+    satCal = 68
+    if (folder == "chop1" or folder == "switchHands1"):
+        valCal = valCal - 30
     for i in range(n):
         #if (time() - startTime > 1):
         #    FPS = i - lastI
@@ -161,6 +163,7 @@ if __name__ == "__main__":
         #print "#### FPS ####"
         #print FPS
         #print "#### ####"
+        print valCal
         depPath = os.path.join(folder, 'image_'+str(i)+'_dep.png')
         imgPath = os.path.join(folder, 'image_'+str(i)+'_rgb.png')
 
@@ -172,20 +175,17 @@ if __name__ == "__main__":
 
         shp = (image.shape[0], image.shape[1])
 
-        red = np.zeros(shp, dtype='uint8')
-        green = np.zeros(shp, dtype='uint8')
-        blue = np.zeros(shp, dtype='uint8')
-
         hue = np.zeros(shp, dtype='uint8')
         sat = np.zeros(shp, dtype='uint8')
         val = np.zeros(shp, dtype='uint8')
 
         hands = np.zeros(shp, dtype='uint8')
 
-        cv2.split(image, (blue, green, red))
-
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         cv2.split(hsv, (hue, sat, val))
+
+        if (i == 1):
+            print "Average Val is ", int(round(cv2.mean(val)[0]))
 
         #cv2.imshow('Live', image)
         #cv2.waitKey()
@@ -220,7 +220,7 @@ if __name__ == "__main__":
 
         #smooth + threshold to filter noise
         hands = cv2.blur(hands, (13, 13))
-        ret, hands = cv2.threshold(hands, 200, 255, cv2.THRESH_BINARY)
+        ret, hands = cv2.threshold(hands, 190, 255, cv2.THRESH_BINARY)
 
         #filteredImages[0][hands == 0] = 0
 
@@ -242,15 +242,22 @@ if __name__ == "__main__":
             newRect = (max(rect[0] - factor, 0), max(rect[1] - factor, 0), min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0]))
             if (area(newRect) > 2000 and (len(rects) == 0 or not sameRect(newRect, rects[0]))):
                 rects.append(newRect)
-                cv2.rectangle(originalImage, (max(rect[0] - factor, 0), max(rect[1] - factor, 0)), (min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0])), (255, 255, 0))
+                #cv2.rectangle(originalImage, (max(rect[0] - factor, 0), max(rect[1] - factor, 0)), (min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0])), (255, 255, 0))
         rects.sort()
         #rects.reverse()
+        print rects
             
         for j in range(len(rects)):
             im = np.zeros(shp + (3,), dtype = "uint8")
             im[rects[j][1] : rects[j][3], rects[j][0] : rects[j][2], :] = 1
             out = cv2.multiply(image, im)
-            camShifter[j].initialize(original, out, rects[j], colors[j])
+            val = j
+            if (len(rects) == 1):
+                print "HELLO"
+                print rects[0]
+                val = (0 if rects[0][0] < 270 else 1)
+                
+            camShifter[val].initialize(original, out, rects[j], colors[val])
  
         print "#### Rects ####"
         print rects
@@ -267,7 +274,7 @@ if __name__ == "__main__":
                 camShift.selection = None; camShift.tracking = False
                 print "OOOOPS. Same one!"
                 sameCounts[j] = 0
-            elif (camShift.tracking):
+            elif (camShift.tracking or camShift.reDraw):
                 try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
                 except: 
                     print "Could not draw ellipse"
@@ -287,6 +294,7 @@ if __name__ == "__main__":
                             plotPoints[j][k].append(point[k])
                 except: print ""
                 print "#### ####"
+                camShift.reDraw = False
 
             try: circles[j].append((int(camShift.track_box[0][0]), int(camShift.track_box[0][1])))
             except: print ""
