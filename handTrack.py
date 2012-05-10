@@ -279,10 +279,12 @@ if __name__ == "__main__":
                     print "#### ####"
 
                 whichHand = "Left" if j == 1 else "Right"
-                print "#### PLOT ({hand} Hand) ####".format(hand = whichHand)
+                print "#### {hand} Hand ####".format(hand = whichHand)
                 try: 
                     point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
-                    print point
+                    print "Position: ", camShift.track_box[0]
+                    print "Size: ", camShift.track_box[1]
+                    print "Orientation: ", camShift.track_box[2]
                     
                     if (point[0] > 0.5):
                         for k in range(3):
