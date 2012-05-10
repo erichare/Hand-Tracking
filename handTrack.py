@@ -11,6 +11,7 @@ import mpl_toolkits.mplot3d.axes3d as p3
 from time import clock, time
 
 NUM_HANDS = 2
+DEBUG = False
 
 f = open('Tcw.txt', 'r')
 aa = f.readlines();
@@ -103,9 +104,10 @@ class App(object):
                 prob &= mask
                 term_crit = ( cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 1 )
 
-                print "#### CamShift Selection ####"
-                print self.selection
-                print "#### ####"
+                if DEBUG:
+                    print "#### CamShift Selection ####"
+                    print self.selection
+                    print "#### ####"
 
                 try: 
                     track_box, selection = cv2.CamShift(prob, self.selection, term_crit)
@@ -120,9 +122,10 @@ class App(object):
                     else:
                         self.selection = None; self.tracking = False
                         self.reDraw = True
-                        print "OOOPS. too far apart"
 
-                except: print "FAILED: Non-positive sizes"; self.selection = None; self.tracking = False
+                except:     
+                    if DEBUG:
+                        print "FAILED: Non-positive sizes"; self.selection = None; self.tracking = False
 
 if __name__ == "__main__":
 
@@ -153,9 +156,20 @@ if __name__ == "__main__":
     valCal = 72
     hueCal = 30
     satCal = 68
-    if (folder == "chop1" or folder == "switchHands1"):
+
+    ###
+    ### TODO: Calibrate VALS
+    ###
+    if (folder == "chopCucumber_scoop2Hands"):
+        valCal = valCal - 15
+    if (folder == "switchHands1"):
         valCal = valCal - 30
+    if (folder == "chop1"):
+        valCal = valCal - 40
     for i in range(n):
+        
+        print "Processing Frame ", i
+
         #if (time() - startTime > 1):
         #    FPS = i - lastI
         #    startTime = time()
@@ -163,7 +177,7 @@ if __name__ == "__main__":
         #print "#### FPS ####"
         #print FPS
         #print "#### ####"
-        print valCal
+
         depPath = os.path.join(folder, 'image_'+str(i)+'_dep.png')
         imgPath = os.path.join(folder, 'image_'+str(i)+'_rgb.png')
 
@@ -184,16 +198,10 @@ if __name__ == "__main__":
         hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
         cv2.split(hsv, (hue, sat, val))
 
-        if (i == 1):
-            print "Average Val is ", int(round(cv2.mean(val)[0]))
-
-        #cv2.imshow('Live', image)
-        #cv2.waitKey()
-        #cv2.imshow('Hue', hue)
-        #cv2.waitKey()
-        #cv2.imshow('Saturation', sat)
-        #cv2.imshow('Value', val)
-        #cv2.waitKey()
+        if DEBUG:
+            cv2.imshow('Hue', hue)
+            cv2.imshow('Saturation', sat)
+            cv2.imshow('Value', val)
 
         ret, hue = cv2.threshold(hue, hueCal, 255, cv2.THRESH_TOZERO)
         ret, hue = cv2.threshold(hue, 255 - hueCal, 255, cv2.THRESH_TOZERO_INV)
@@ -208,12 +216,10 @@ if __name__ == "__main__":
         ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_BINARY) #set to 0 if > 204, otherwise leave as is
 
 
-        #cv2.imshow('Saturation threshold', sat)
-        #cv2.waitKey()
-        #cv2.imshow('Hue threshold', hue)
-        #cv2.waitKey()
-        #cv2.imshow('Val threshold', val)
-        #cv2.waitKey()
+        if DEBUG:
+            cv2.imshow('Saturation threshold', sat)
+            cv2.imshow('Hue threshold', hue)
+            cv2.imshow('Val threshold', val)
 
         one = cv2.multiply(hue, sat)
         hands = cv2.multiply(one, val)
@@ -222,16 +228,7 @@ if __name__ == "__main__":
         hands = cv2.blur(hands, (13, 13))
         ret, hands = cv2.threshold(hands, 190, 255, cv2.THRESH_BINARY)
 
-        #filteredImages[0][hands == 0] = 0
-
-        #cv2.imshow('Original', image)
-        #cv2.waitKey()
         cv2.imshow('Hands', hands)
-        #cv2.waitKey()
-        #cv2.imshow('Filtered', filteredImage)
-        #cv2.waitKey()
-        #cv2.imwrite('out.jpg', hands)
-        #cv2.waitKey()
 
         handContours = findHands(hands)
         rects = []
@@ -242,10 +239,9 @@ if __name__ == "__main__":
             newRect = (max(rect[0] - factor, 0), max(rect[1] - factor, 0), min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0]))
             if (area(newRect) > 2000 and (len(rects) == 0 or not sameRect(newRect, rects[0]))):
                 rects.append(newRect)
-                #cv2.rectangle(originalImage, (max(rect[0] - factor, 0), max(rect[1] - factor, 0)), (min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0])), (255, 255, 0))
+                if DEBUG:
+                    cv2.rectangle(originalImage, (max(rect[0] - factor, 0), max(rect[1] - factor, 0)), (min(rect[0] + rect[2] + factor, shp[1]), min(rect[1] + rect[3] + factor, shp[0])), (255, 255, 0))
         rects.sort()
-        #rects.reverse()
-        print rects
             
         for j in range(len(rects)):
             im = np.zeros(shp + (3,), dtype = "uint8")
@@ -253,15 +249,14 @@ if __name__ == "__main__":
             out = cv2.multiply(image, im)
             val = j
             if (len(rects) == 1):
-                print "HELLO"
-                print rects[0]
                 val = (0 if rects[0][0] < 270 else 1)
                 
             camShifter[val].initialize(original, out, rects[j], colors[val])
  
-        print "#### Rects ####"
-        print rects
-        print "#### ####"
+        if DEBUG:
+            print "#### Rects ####"
+            print rects
+            print "#### ####"
 
         for j in range(len(camShifter)):
             camShift = camShifter[j]
@@ -272,19 +267,19 @@ if __name__ == "__main__":
                 sameCounts[j] = 0
             if (sameCounts[j] == 4):
                 camShift.selection = None; camShift.tracking = False
-                print "OOOOPS. Same one!"
                 sameCounts[j] = 0
             elif (camShift.tracking or camShift.reDraw):
                 try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
                 except: 
-                    print "Could not draw ellipse"
+                    print ""
+                if DEBUG:
+                    print "#### RotatedRect TrackBox 1 ####"
+                    try: print camShifter[j].track_box
+                    except: print "Could not print trackbox"
+                    print "#### ####"
 
-                print "#### RotatedRect TrackBox 1 ####"
-                try: print camShifter[j].track_box
-                except: print "Could not print trackbox"
-                print "#### ####"
-
-                print "#### PLOT ####"
+                whichHand = "Left" if j == 1 else "Right"
+                print "#### PLOT ({hand} Hand) ####".format(hand = whichHand)
                 try: 
                     point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
                     print point
@@ -302,7 +297,11 @@ if __name__ == "__main__":
 
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        cv2.waitKey()
+        key = cv2.waitKey(10)
+        if (key == 115):
+            cv2.waitKey()
+        elif (key == 113):
+            break
 
     #fig = plt.figure()
 
