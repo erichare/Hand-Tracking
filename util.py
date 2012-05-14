@@ -7,6 +7,7 @@
 import numpy as np
 import numpy
 from numpy import array, dot
+import cv2
 
 # ============= Transform-specific ================= #
 	
@@ -47,3 +48,30 @@ def projectPoints(X_wor, Twc):
 	X_draw = X_im*camAlpha + numpy.tile(camCenter, (1, X_im.shape[1]));
 
 	return X_draw
+
+def depthBackgroundSubtract(depth, staticMap=None):
+	if not staticMap:
+		staticMap = cv2.imread("staticmapCV2.png", cv2.CV_LOAD_IMAGE_UNCHANGED)
+	nodepthmask = cv2.compare(depth, np.array(10), cv2.CMP_LE)
+	depth[nodepthmask != 0] = 10000
+
+	return cv2.compare(depth, staticMap, cv2.CMP_LT)
+
+def segmentAndMask(depth):
+
+    depth_final = depth.copy()
+
+    # only keep foreground
+    foregroundMask = depthBackgroundSubtract(depth)
+
+    backgroundMask = np.zeros(depth.shape, dtype="uint8")
+    backgroundMask = cv2.bitwise_not(foregroundMask)
+
+    depth_final[backgroundMask != 0] = 0
+
+    # mask out the pixels with no depth
+    noDepthMask = cv2.compare(depth, np.array(0), cv2.CMP_LE)
+    depth_final[noDepthMask != 0] = 0
+
+    return depth_final
+

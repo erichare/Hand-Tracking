@@ -182,7 +182,7 @@ if __name__ == "__main__":
         imgPath = os.path.join(folder, 'image_'+str(i)+'_rgb.png')
 
         image = cv2.imread(imgPath)
-        depth = cv2.imread(depPath, -1)
+        depthOld = cv2.imread(depPath, -1)
 
         originalImage = image.copy()
         original = image.copy()
@@ -203,6 +203,45 @@ if __name__ == "__main__":
             cv2.imshow('Saturation', sat)
             cv2.imshow('Value', val)
 
+        depth = util.segmentAndMask(depthOld)
+        
+        for j in range(0, shp[0], shp[0] / 3):
+            depth[j:(j + shp[0] / 3), :][depth[j:(j + shp[0] / 3), :] > (1000 - (150 * (j / (shp[0] / 3))) + (40 * (j / (shp[0] / 3))))] = 0
+
+        for j in range(0, shp[1], shp[1] / 4):
+                    depth[:, j:(j + shp[1] / 4)][depth[:, j:(j + shp[1] / 4)] > (925 + (25 * (j / (shp[1] / 4))))] = 0
+
+        cv2.imshow('depth', depth * 10)
+
+        newDep = cv2.convertScaleAbs(depth)
+        ret, depThresh = cv2.threshold(newDep, 0, 255, cv2.THRESH_BINARY)
+        depConts, depHier = cv2.findContours(depThresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+        depRects = []
+        for cont in depConts:
+            rect = cv2.boundingRect(cont)
+            newRect = (rect[1], rect[0], rect[0] + rect[2], rect[1] + rect[3])
+            if (area((rect[0], rect[1], rect[0] + rect[2], rect[1] + rect[3])) > 2000):
+                depRects.append(newRect)
+        
+        depRects.sort()
+        im = np.zeros(shp + (3,), dtype = "uint8")
+        print depRects
+        for j in range(NUM_HANDS):
+            if (len(depRects) > j and depRects[j][0] < 20):
+                depHand = (depRects[j][1], 0, depRects[j][2], depRects[j][3])
+                cv2.rectangle(image, (depHand[0], depHand[1]), (depHand[2], depHand[3]), (255, 0, 0))
+
+                im[depHand[1] : depHand[3], depHand[0] : depHand[2], :] = 1
+
+        outputOld = cv2.multiply(image, im)
+        ret, output = cv2.threshold(outputOld, 0, 255, cv2.THRESH_BINARY)
+
+        output1 = np.zeros(shp, dtype='uint8')
+        output2 = np.zeros(shp, dtype='uint8')
+        output3 = np.zeros(shp, dtype='uint8')
+        cv2.split(output, (output1, output2, output3))
+
         ret, hue = cv2.threshold(hue, hueCal, 255, cv2.THRESH_TOZERO)
         ret, hue = cv2.threshold(hue, 255 - hueCal, 255, cv2.THRESH_TOZERO_INV)
         ret, hue = cv2.threshold(hue, 0, 255, cv2.THRESH_BINARY_INV)
@@ -222,12 +261,13 @@ if __name__ == "__main__":
             cv2.imshow('Val threshold', val)
 
         one = cv2.multiply(hue, sat)
-        hands = cv2.multiply(one, val)
+        two = cv2.multiply(one, val)
+        hands = cv2.multiply(two, output1)
 
         #smooth + threshold to filter noise
         hands = cv2.blur(hands, (13, 13))
         ret, hands = cv2.threshold(hands, 190, 255, cv2.THRESH_BINARY)
-
+        
         cv2.imshow('Hands', hands)
 
         handContours = findHands(hands)
@@ -281,7 +321,7 @@ if __name__ == "__main__":
                 whichHand = "Left" if j == 1 else "Right"
                 print "#### {hand} Hand ####".format(hand = whichHand)
                 try: 
-                    point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
+                    point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depthOld[camShift.track_box[0][0], camShift.track_box[0][1]])
                     print "Position: ", camShift.track_box[0]
                     print "Size: ", camShift.track_box[1]
                     print "Orientation: ", camShift.track_box[2]
@@ -299,7 +339,7 @@ if __name__ == "__main__":
 
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        key = cv2.waitKey(10)
+        key = cv2.waitKey()
         if (key == 115):
             cv2.waitKey()
         elif (key == 113):
