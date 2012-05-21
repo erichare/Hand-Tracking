@@ -77,7 +77,7 @@ class App(object):
             h = int(self.hist[i])
             cv2.rectangle(img, (i*bin_w+2, 255), ((i+1)*bin_w-2, 255-h), (int(180.0*i/bin_count), 255, 255), -1)
         img = cv2.cvtColor(img, cv2.COLOR_HSV2BGR)
-        cv2.imshow('hist', img)
+        #cv2.imshow('hist', img)
     
     def run(self):
         if self.selection:
@@ -164,7 +164,9 @@ if __name__ == "__main__":
     if (folder == "chop1" or folder == "chop1/"):
         valCal = valCal - 30
 
-    for i in range(n):
+    i = 0
+    waitAmount = 5
+    while (i < n):
         
         print "Processing Frame ", i
 
@@ -230,17 +232,17 @@ if __name__ == "__main__":
         output3 = np.zeros(shp, dtype='uint8')
         cv2.split(output, (output1, output2, output3))
 
-        sat = cv2.inRange(sat, np.array((64)), np.array((210)))
-        hue = cv2.inRange(hue, np.array((0)), np.array((30)))
+        sat = cv2.inRange(sat, np.array((68)), np.array((200)))
+        hue = cv2.inRange(hue, np.array((0)), np.array((22)))
         ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_TOZERO)
         val = cv2.equalizeHist(val)
         ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_BINARY)
 
 
-        if DEBUG:
-            cv2.imshow('Saturation threshold', sat)
-            cv2.imshow('Hue threshold', hue)
-            cv2.imshow('Val threshold', val)
+        #if DEBUG:
+        cv2.imshow('Saturation threshold', sat)
+        cv2.imshow('Hue threshold', hue)
+        cv2.imshow('Val threshold', val)
 
         one = cv2.multiply(hue, sat)
         two = cv2.multiply(one, val)
@@ -270,7 +272,7 @@ if __name__ == "__main__":
             im[rects[j][1] : rects[j][3], rects[j][0] : rects[j][2], :] = 1
             out = cv2.multiply(image, im)
             val = j
-            if (len(rects) == 1):
+            if (len(rects) == 1 and not camShifter[val].tracking):
                 val = (0 if rects[0][0] < 270 else 1)
                 
             camShifter[val].initialize(original, out, rects[j], colors[val])
@@ -320,13 +322,30 @@ if __name__ == "__main__":
             except: print ""
             drawCircles(image, circles[j], color = colors[j])
 
-        cv2.imshow('Live', image)
+        #cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        key = cv2.waitKey(5)
+        key = cv2.waitKey(waitAmount)
+
         if (key == 115):
-            cv2.waitKey()
+            key = cv2.waitKey(abs(waitAmount - 5))
+            if (key == 97 or key == 100):
+                waitAmount = 0
+                i = i - 2
+            else:
+                waitAmount = 5
         elif (key == 113):
             break
+        elif (key == 97):
+            #for j in range(NUM_HANDS):
+            #    camShifter[j].selection = None
+            #    camShifter[j].tracking = False
+            waitAmount = 0
+            i = i - 2
+        elif (key == 100):
+            waitAmount = 0
+
+        i = i + 1
+
 
     #fig = plt.figure()
 
