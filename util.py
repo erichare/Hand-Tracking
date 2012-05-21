@@ -6,6 +6,7 @@
 
 import numpy as np
 import numpy
+import os
 from numpy import array, dot
 import cv2
 
@@ -74,4 +75,31 @@ def segmentAndMask(depth):
     depth_final[noDepthMask != 0] = 0
 
     return depth_final
+
+def buildMinMap(folder, needFlip=False):
+	debug = False
+
+	fnames = os.listdir(folder)
+	fnames = [fn for fn in fnames if fn.find('dep.png') > 0]
+
+	shp = None
+	if fnames:
+		frame = cv2.imread(os.path.join(folder, fnames[0]), -1)
+		shp = frame.shape
+
+	big = 65535
+	minMap = np.ones(shp, 'uint16')*big
+		
+	for fn in fnames:
+		if debug:
+			print minMap.max(), minMap.min()
+	
+		path = os.path.join(folder, fn)
+		frame = cv2.imread(path, -1)
+				
+		frame[frame <= 0] = big
+		minMap = np.minimum(minMap, frame)
+		
+	minMap[minMap == big] = 0
+	return minMap
 

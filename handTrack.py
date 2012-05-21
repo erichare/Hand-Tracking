@@ -43,7 +43,7 @@ def worldPoint(j, i, d):
     X = np.array([x, y, d, 1])
     X_ = np.dot(Tcw, X.transpose())
 		
-    return (X_[0], X_[1], X[2])
+    return (X_[0], X_[1], X_[2])
 
 def findHands(hands, num = NUM_HANDS):
     contours, hierarchy = cv2.findContours(hands, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
@@ -153,19 +153,17 @@ if __name__ == "__main__":
     startTime = time()
     FPS = 0
     lastI = 0
-    valCal = 72
-    hueCal = 30
-    satCal = 68
 
-    ###
-    ### TODO: Calibrate VALS
-    ###
-    if (folder == "chopCucumber_scoop2Hands"):
-        valCal = valCal - 15
-    if (folder == "switchHands1"):
+    valCal = 60
+
+    mask = ~np.bool8(cv2.imread(os.path.join(folder, 'mask.png'), -1))
+    tablemodel = util.buildMinMap(os.path.join(folder, 'table'))
+
+    if (folder == "switchHands1" or folder == "switchedHands1/"):
+        valCal = valCal - 20
+    if (folder == "chop1" or folder == "chop1/"):
         valCal = valCal - 30
-    if (folder == "chop1"):
-        valCal = valCal - 40
+
     for i in range(n):
         
         print "Processing Frame ", i
@@ -182,7 +180,7 @@ if __name__ == "__main__":
         imgPath = os.path.join(folder, 'image_'+str(i)+'_rgb.png')
 
         image = cv2.imread(imgPath)
-        depthOld = cv2.imread(depPath, -1)
+        depth = cv2.imread(depPath, -1)
 
         originalImage = image.copy()
         original = image.copy()
@@ -203,18 +201,9 @@ if __name__ == "__main__":
             cv2.imshow('Saturation', sat)
             cv2.imshow('Value', val)
 
-        depth = util.segmentAndMask(depthOld)
-        
-        for j in range(0, shp[0], shp[0] / 3):
-            depth[j:(j + shp[0] / 3), :][depth[j:(j + shp[0] / 3), :] > (1000 - (150 * (j / (shp[0] / 3))) + (40 * (j / (shp[0] / 3))))] = 0
-
-        for j in range(0, shp[1], shp[1] / 4):
-                    depth[:, j:(j + shp[1] / 4)][depth[:, j:(j + shp[1] / 4)] > (925 + (25 * (j / (shp[1] / 4))))] = 0
-
-        cv2.imshow('depth', depth * 10)
-
-        newDep = cv2.convertScaleAbs(depth)
-        ret, depThresh = cv2.threshold(newDep, 0, 255, cv2.THRESH_BINARY)
+        newDep = cv2.convertScaleAbs(cv2.absdiff(depth, tablemodel))
+        ret, depThresh = cv2.threshold(newDep, 15, 255, cv2.THRESH_BINARY)
+        cv2.imshow('depth', depThresh)
         depConts, depHier = cv2.findContours(depThresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
         depRects = []
@@ -226,7 +215,6 @@ if __name__ == "__main__":
         
         depRects.sort()
         im = np.zeros(shp + (3,), dtype = "uint8")
-        print depRects
         for j in range(NUM_HANDS):
             if (len(depRects) > j and depRects[j][0] < 20):
                 depHand = (depRects[j][1], 0, depRects[j][2], depRects[j][3])
@@ -242,17 +230,11 @@ if __name__ == "__main__":
         output3 = np.zeros(shp, dtype='uint8')
         cv2.split(output, (output1, output2, output3))
 
-        ret, hue = cv2.threshold(hue, hueCal, 255, cv2.THRESH_TOZERO)
-        ret, hue = cv2.threshold(hue, 255 - hueCal, 255, cv2.THRESH_TOZERO_INV)
-        ret, hue = cv2.threshold(hue, 0, 255, cv2.THRESH_BINARY_INV)
-
-        ret, sat = cv2.threshold(sat, satCal, 255, cv2.THRESH_TOZERO) #set to 0 if <= 64, otherwise leave as is
-        sat = cv2.equalizeHist(sat)
-        ret, sat = cv2.threshold(sat, satCal, 255, cv2.THRESH_BINARY) #set to 0 if <= 64, otherwise 255
-
-        ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_TOZERO) #set to 0 if <= 50, otherwise leave as is
+        sat = cv2.inRange(sat, np.array((64)), np.array((210)))
+        hue = cv2.inRange(hue, np.array((0)), np.array((30)))
+        ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_TOZERO)
         val = cv2.equalizeHist(val)
-        ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_BINARY) #set to 0 if > 204, otherwise leave as is
+        ret, val = cv2.threshold(val, valCal, 255, cv2.THRESH_BINARY)
 
 
         if DEBUG:
@@ -266,7 +248,7 @@ if __name__ == "__main__":
 
         #smooth + threshold to filter noise
         hands = cv2.blur(hands, (13, 13))
-        ret, hands = cv2.threshold(hands, 190, 255, cv2.THRESH_BINARY)
+        ret, hands = cv2.threshold(hands, 200, 255, cv2.THRESH_BINARY)
         
         cv2.imshow('Hands', hands)
 
@@ -321,10 +303,11 @@ if __name__ == "__main__":
                 whichHand = "Left" if j == 1 else "Right"
                 print "#### {hand} Hand ####".format(hand = whichHand)
                 try: 
-                    point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depthOld[camShift.track_box[0][0], camShift.track_box[0][1]])
+                    point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
                     print "Position: ", camShift.track_box[0]
                     print "Size: ", camShift.track_box[1]
                     print "Orientation: ", camShift.track_box[2]
+                    print "World Point: ", point
                     
                     if (point[0] > 0.5):
                         for k in range(3):
@@ -339,7 +322,7 @@ if __name__ == "__main__":
 
         cv2.imshow('Live', image)
         cv2.imshow('camshift', originalImage)
-        key = cv2.waitKey()
+        key = cv2.waitKey(5)
         if (key == 115):
             cv2.waitKey()
         elif (key == 113):
