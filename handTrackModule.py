@@ -101,10 +101,13 @@ class App(object):
                 try: 
                     track_box, selection = cv2.CamShift(prob, self.selection, term_crit)
 
-                    if self.selection[0] > 640 or self.selection[0] < 0 or self.selection[1] > 480 or self.selection[1] < 0:
+                    if (self.selection == selection and self.track_box == track_box):
                         self.selection = None; self.tracking = False
 
-                    if ((abs(selection[0] - self.selection[0]) < 100) and (abs(selection[1] - self.selection[1]) < 100)):
+                    elif self.selection[0] > 640 or self.selection[0] < 0 or self.selection[1] > 480 or self.selection[1] < 0:
+                        self.selection = None; self.tracking = False
+
+                    elif ((abs(selection[0] - self.selection[0]) < 100) and (abs(selection[1] - self.selection[1]) < 100)):
                         self.prevSelection = self.selection
                         self.selection = selection
                         self.track_box = track_box
@@ -116,20 +119,25 @@ class App(object):
                     if DEBUG:
                         print "FAILED: Non-positive sizes"; self.selection = None; self.tracking = False
 
-def getHands(folder, image, depth, showImages = False):
+def getHands(image, depth, camShifter = None, colors = None, mask = None, tablemodel = None, showImages = False):
 
-    camShifter = []
-    colors = []
-    circles = []
-    for i in range(NUM_HANDS):
-        camShifter.append(App())
-        colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
-        circles.append([])
+    if (mask is None or tablemodel is None):
+        mask = ~np.bool8(cv2.imread(os.path.join(folder, 'mask.png'), -1))
+        tablemodel = util.buildMinMap(os.path.join(folder, 'table'))
+
+    if (camShifter is None):
+        camShifter = []
+        colors = []
+        for i in range(NUM_HANDS):
+            camShifter.append(App())
+            colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
+
+    if (colors is None):
+        colors = []
+        for i in range(NUM_HANDS):
+            colors.append((random.randint(0, 255), random.randint(0, 255), random.randint(0, 255)))
 
     valCal = 60
-
-    mask = ~np.bool8(cv2.imread(os.path.join(folder, 'mask.png'), -1))
-    tablemodel = util.buildMinMap(os.path.join(folder, 'table'))
 
     originalImage = image.copy()
     original = image.copy()
@@ -229,35 +237,36 @@ def getHands(folder, image, depth, showImages = False):
     for j in range(len(camShifter)):
         camShift = camShifter[j]
         camShift.run()
-        try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
-        except: 
-            print ""
-        if DEBUG:
-            print "#### RotatedRect TrackBox 1 ####"
-            try: print camShifter[j].track_box
-            except: print "Could not print trackbox"
+
+        if (len(rects) > 0 and (camShift.tracking or camShift.reDraw)):
+            try: cv2.ellipse(originalImage, camShift.track_box, camShift.color, 2)
+            except: 
+                print ""
+            if DEBUG:
+                print "#### RotatedRect TrackBox 1 ####"
+                try: print camShifter[j].track_box
+                except: print "Could not print trackbox"
+                print "#### ####"
+
+            whichHand = "Left" if j == 1 else "Right"
+            print "#### {hand} Hand ####".format(hand = whichHand)
+            try: 
+                point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
+                print "Position: ", camShift.track_box[0]
+                print "Size: ", camShift.track_box[1]
+                print "Orientation: ", camShift.track_box[2]
+                print "World Point: ", point
+
+            except: print ""
             print "#### ####"
-
-        whichHand = "Left" if j == 1 else "Right"
-        print "#### {hand} Hand ####".format(hand = whichHand)
-        try: 
-            point = worldPoint(camShift.track_box[0][0], camShift.track_box[0][1], depth[camShift.track_box[0][0], camShift.track_box[0][1]])
-            print "Position: ", camShift.track_box[0]
-            print "Size: ", camShift.track_box[1]
-            print "Orientation: ", camShift.track_box[2]
-            print "World Point: ", point
-
-        except: print ""
-        print "#### ####"
 
     if (showImages):
         cv2.imshow('Hands', hands)
         cv2.imshow('camshift', originalImage)
-        cv2.waitKey()
 
     handList = [None, None]
     for j in range(NUM_HANDS):
         if (camShifter[j].track_box is not None):
             handList[(j + 1) % 2] = camShifter[j].track_box[0]
 
-    return handList
+    return handList, camShifter, colors, originalImage
