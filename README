@@ -1,1 +1,34 @@
-test
+HandTrackingModule
+
+
+Requirements
+
+* Python 2.6 or Greater
+* OpenCV 2.3 or Greater (Tested on OpenCV 2.4)
+* python-numpy module
+* (Optional) python-matplotlib (for plotting)
+
+
+How to Run
+
+To run the hand tracking module as a standalone app, simply run the python script handTrack.py, passing as a parameter the folder containing input images of the appropriate format.  The images must contain rgb and depth versions, named like 'image_<num>_<rgb|dep>.png'.  The folder must also contain a table and a hand-video subfolder with the appropriate images.  For example, to run the algorithm on the salad1 data (assuming the salad1 folder is in your Home directory), run:
+
+    python handTrack.py ~/salad1
+
+
+How to Integrate
+
+To integrate the module into Oasis, or another application, initialize two values outside the main application loop:
+
+    camShifter = None
+    colors = None
+
+Then, inside the main loop (for each image), call:
+
+    handList, camShifter, colors, originalImage = handTrackModule.getHands(image, depth, camShifter, colors, mask, tablemodel)
+
+Note that you must pass in the mask and tablemodel, as well as the image and depth image, both as cv2 images.  You can then get the position of the left hand by calling:
+
+    handList[0]
+
+Which will return a tuple consisting of the (x, y) position of the center of the hand.  Equivalently, the right hand can be obtained by handList[1].
