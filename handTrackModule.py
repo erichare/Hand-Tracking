@@ -2,18 +2,16 @@ import cv2
 import numpy as np
 import sys
 import os
+import config
 import string
 import util
-import matplotlib.pyplot as plt
 import heapq
 import random
-import mpl_toolkits.mplot3d.axes3d as p3
-from time import clock, time
 
 # Set the number of hands possible in a frame (default is 2)
 # Debug mode will show cutoff values for HSV/depth, etc
 NUM_HANDS = 2
-DEBUG = False
+DEBUG = True
 
 # Prepare for plotting points
 f = open('Tcw.txt', 'r')
@@ -33,10 +31,10 @@ def area(rect):
 
 # Returns true if the two rectangles are the 'same'... that is, they are bounding to the same blob
 def sameRect(rect1, rect2):
-    test1 = (((abs(rect1[0] - rect2[0]) < 40) and (abs(rect1[1] - rect2[1]) < 40)))
+    test1 = (((abs(rect1[0] - rect2[0]) < 30) and (abs(rect1[1] - rect2[1]) < 30)))
     test2 = ((rect1[0] > rect2[0]) and (rect1[2] < rect2[2]) and (rect1[1] > rect2[1]) and (rect1[3] < rect2[3]))
     test3 = ((rect1[0] < rect2[0]) and (rect1[2] > rect2[2]) and (rect1[1] < rect2[1]) and (rect1[3] > rect2[3]))
-    test4 = (((abs(rect1[2] - rect2[2]) < 40) and (abs(rect1[3] - rect2[3]) < 40)))
+    test4 = (((abs(rect1[2] - rect2[2]) < 30) and (abs(rect1[3] - rect2[3]) < 30)))
     return (test1 or test2 or test3 or test4)
 
 # Convert a point to a worldpoint
@@ -139,7 +137,7 @@ class CamShiftTracker(object):
                     if (self.track_box == track_box and self.selection == selection):
                         self.selection = None; self.tracking = False; self.track_box = None
 
-                    elif self.selection[0] > 640 or self.selection[0] < 0 or self.selection[1] > 480 or self.selection[1] < 0:
+                    elif self.selection[0] > config.videoWidth or self.selection[0] < 0 or self.selection[1] > config.videoHeight or self.selection[1] < 0:
                         self.selection = None; self.tracking = False; self.track_box = None
 
                     elif track_box[0] < 0.01 or track_box[1] < 0.01:
@@ -236,12 +234,6 @@ def getHands(image, depth, camShifter = None, colors = None, mask = None, tablem
     hue = cv2.inRange(hue, np.array((0)), np.array((22)))
     val = cv2.inRange(val, np.array((meanVal)), np.array((255)))
 
-    # Show the thresholds if debug is enabled
-    if DEBUG:
-        cv2.imshow('Saturation threshold', sat)
-        cv2.imshow('Hue threshold', hue)
-        cv2.imshow('Val threshold', val)
-
     # Multiply all the thresholds to obtain our final hand image
     one = cv2.multiply(hue, sat)
     two = cv2.multiply(one, val)
@@ -250,6 +242,16 @@ def getHands(image, depth, camShifter = None, colors = None, mask = None, tablem
     # Smooth + threshold to filter noise
     hands = cv2.blur(hands, (13, 13))
     ret, hands = cv2.threshold(hands, 200, 255, cv2.THRESH_BINARY)
+
+    original[hands == 0] = 0
+
+    # Show the thresholds if debug is enabled
+    if DEBUG:
+        cv2.imshow('Saturation threshold', sat)
+        cv2.imshow('Hue threshold', hue)
+        cv2.imshow('Val threshold', val)
+        cv2.imshow('Depth threshold', depThresh * 100)
+        cv2.imshow('Hands', original)
     
     # Find the hands by selecting the two largest blobs
     handContours = findHands(hands)

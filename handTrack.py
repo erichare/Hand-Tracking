@@ -3,11 +3,8 @@ import numpy as np
 import handTrackModule
 import sys
 import os
-import string
 import util
 import matplotlib.pyplot as plt
-import heapq
-import random
 import mpl_toolkits.mplot3d.axes3d as p3
 from time import clock, time
 
@@ -103,9 +100,10 @@ if __name__ == "__main__":
             hand = handList[j]
             if hand:
                 point = handTrackModule.worldPoint(hand[0], hand[1], depth[hand[1], hand[0]])
-                for k in range(3):
-                    plotPoints[j][k].append(point[k])
-                timePoints[j].append(i)
+                if (abs(point[1]) > 0.5):
+                    for k in range(3):
+                            plotPoints[(j + 1) % 2][k].append(point[k])
+                    timePoints[(j + 1) % 2].append(i)
 
 
         cv2.imshow("Image", originalImage)
